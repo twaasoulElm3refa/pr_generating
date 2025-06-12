@@ -19,6 +19,8 @@ app = FastAPI()
 load_dotenv()
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
+host = os.getenv("DB_HOST")
+port = os.getenv("DB_PORT")
 
 
 def generate_article_based_on_topic(topic, corpus, index,lines_number,website):
@@ -77,4 +79,4 @@ async def generate_article(user_id: str):
     return {"generated_content":article}
 
 if __name__ == "__main__":              
-    uvicorn.run(app, host="66.29.132.81", port=443)
+    uvicorn.run(app, host=host, port=port)

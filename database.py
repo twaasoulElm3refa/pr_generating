@@ -7,11 +7,12 @@ import os
 load_dotenv()  # يبحث عن .env في مجلد المشروع الحالي
 
 api_key = os.getenv("OPENAI_API_KEY")
-db_name = os.getenv("DB_NAME")
 db_host = os.getenv("DB_HOST")
+db_port = os.getenv("DB_PORT")
 db_user = os.getenv("DB_USER")
 db_password = os.getenv("DB_PASSWORD")
-db_port = os.getenv("DB_PORT")
+db_name = os.getenv("DB_NAME")
+
 
 
 def get_db_connection():

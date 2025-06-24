@@ -50,8 +50,8 @@ def generate_article_based_on_topic(topic, corpus, index,lines_number,website):
     
     return response.choices[0].message.content.strip()
 
-@app.get("/generate-article/{user_id}")
-async def generate_article(user_id: str):
+@app.get("/{user_id}")
+async def root(user_id: str):
     connection = get_db_connection()
     cursor = connection.cursor(dictionary=True)
     user_session_id = user_id

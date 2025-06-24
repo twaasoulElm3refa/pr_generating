@@ -24,9 +24,10 @@ def get_db_connection():
             port=db_port
         )
         if connection.is_connected():
-            print("Connected to MySQL successfully!")
+            print("✅ Connected!")
             return connection
     except Error as e:
+        print("❌ Failed.")
         print(f"Error connecting to MySQL: {e}")
         return None
 
@@ -40,7 +41,7 @@ def fetch_press_releases(user_id: str ):
         cursor = connection.cursor(dictionary=True)
         query = """
         SELECT * 
-        FROM wp_press_release_form
+        FROM wpl3_press_release_Form
         WHERE user_id = %s 
         """
         cursor.execute(query, (user_id,))
@@ -60,7 +61,7 @@ def fetch_press_releases(user_id: str ):
 
 
 
-def update_press_release(user_id, org_name, article):
+def update_press_release(user_id, organization_name, article):
     connection = get_db_connection()
     if connection is None:
         return False
@@ -68,11 +69,11 @@ def update_press_release(user_id, org_name, article):
     try:
         cursor = connection.cursor()
         query = """
-        INSERT INTO wp_articles (user_id , organization_name , article)
+        INSERT INTO wpl3_articles (user_id, organization_name, article)
         VALUES (%s, %s, %s)
         ON DUPLICATE KEY UPDATE article = VALUES(article)
         """
-        cursor.execute(query, (user_id, org_name, article))
+        cursor.execute(query, (user_id, organization_name, article))
         connection.commit()
         return True
     except Error as e:

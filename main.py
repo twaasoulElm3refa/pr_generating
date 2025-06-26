@@ -43,8 +43,8 @@ async def root(user_id: str):
     release = all_release[-1]
     
    # Prepare the Arabic prompt
-        topic = f"اكتب بيان للشركة {release['organization_name']} حيث محتوى البيان عن {release['about_press']} وبيانات التواصل {release['organization_phone'],release['organization_email'],release['organization_website']} بتاريخ {release['press_date']} واذكر حول الشركه فى النهايه{release['about_organization']} ويكون عدد الاسطر {release['press_lines_number']}"
-        context = f"""تكشف أحدث الأبحاث التي أجرتها هاسل ودينسيتي أن أماكن العمل التقنية لا تزال تلحق بأنماط العمل الجديدة
+   topic = f"اكتب بيان للشركة {release['organization_name']} حيث محتوى البيان عن {release['about_press']} وبيانات التواصل {release['organization_phone'],release['organization_email'],release['organization_website']} بتاريخ {release['press_date']} واذكر حول الشركه فى النهايه{release['about_organization']} ويكون عدد الاسطر {release['press_lines_number']}"
+   context = f"""تكشف أحدث الأبحاث التي أجرتها هاسل ودينسيتي أن أماكن العمل التقنية لا تزال تلحق بأنماط العمل الجديدة
     نموذج بيان صحفي لأي مناسبة
     يمكن تخصيص نموذج بيان صحفي أساسي لأي إعلان تقريبًا. ابدأ باستخدام النموذج أدناه. أثناء الكتابة، املأ النص بين قوسين، ولكن لا تُدرج أسماء الأقسام، فهي مكتوبة بخط مائل.
     العنوان الرئيسي

@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from connection_test import check_mysql_connection,fetch_press_releases ,update_press_release
+from database import get_db_connection,fetch_press_releases ,update_press_release
 import os
 from dotenv import load_dotenv
 import uvicorn

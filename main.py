@@ -14,16 +14,24 @@ host = os.getenv("DB_HOST")
 port = os.getenv("DB_PORT")
 
 
-def generate_article_based_on_topic(topic,context,lines_number,website,about_organization):
-   
+def generate_article_based_on_topic(topic,context,release):
+ 
     # Create the prompt for GPT
-    prompt = f"""
-أنت صحفي عربى محترف في مؤسسة إعلامية بارزة، ومتخصص في كتابة البيانات الإخبارية بلغة عربية فصيحة تقوم بانشاء بيان صحفي نيابة عنهم حيث تصيغ البيان بصيغة "تعلن شركة ..."وليس "اعلنت" وهكذا حيث تكون الصيغه على لسان المؤسسة مع الالتزام بالبيانات والتفاصيلئ الممنوحة اليك وصياغتها فى صوره بيان مع الالتزام بعدد الاسطر
-{lines_number} معتمدا فى البيان على البيانات المدخله لك من المستخدم او مواقع رسميه ذات مصادر موثقه مائة باللمائة مع ذكر فى بدايه البيان العنوان الرئيسي و تاريخ اليوم حسب الوطن العربي ثم محتوى البيان ثم كلمة معلومات للمحررين ثم كلمة حول الشركة في السطر التالي مباشرة ثم {about_organization} البينات ثم فى نهايه البيان بيانات التواصل من تليفون و ايميل دون تاليف او تعديل مع ترك مساحتها فارغه اذا لم يتم تحديدها من المستخدم: {topic}.
-    استخدم المعلومات التالية كنموذج لكيقية صياغه البيان :
+    prompt = f"""انت صحفي عربي محترف في مؤسسة إعلامية بارزة ,متخصص فى كتابة البيانات الصحفية فى مختلف المواضيع بلغة عربية فصيحة ودقيقه .
+    حيث يكون البيان بصيغة "تعلن شركة ..."وليس "اعلنت" وهكذا حيث تكون الصيغه على لسان المؤسسة مع الالتزام بالبيانات والتفاصيلئ الممنوحة اليك وصياغتها فى صوره بيان
+    مع الالتزام بعدد الاسطر   release['press_lines_number']
+    حيث يكون تكوين البيان :
+    بدايه البيان العنوان الرئيسي و تاريخ اليوم حسب الوطن العربي 
+     معتمدا فيه على {topic} release['press_date'] ثم محتوى البيان 
+   ثم كلمة معلومات للمحررين ثم كلمة حول الشركة في السطر التالي مباشرة
+   release['about_organization'] ثم 
+فى نهايه البيان بيانات التواصل من تليفون و ايميل وموقع المؤسسة دون تاليف
+release['organization_phone']
+release['organization_email']
+release['organization_website']
+ استخدم المعلومات التالية كنموذج لكيقية صياغه البيان :
     {context}
-    و الرجوع الى موقعهم الموجود فى  {website} لكتابه حول عنهم من خدمات يقدموها الى من هم 
-    """  
+ """  
    
     # Get response from OpenAI
     response  = openai.chat.completions.create(model="gpt-4o-mini",
@@ -110,8 +118,7 @@ async def generate_article(user_id: str):
       التقديم الطويل قبل الدخول في الخبر.
       """
    
-       
-       article = generate_article_based_on_topic(topic,context,release['press_lines_number'],release['organization_website'] ,{release['about_organization']})
+       article = generate_article_based_on_topic(topic,context, release)
    
        update_data= update_press_release(release['user_id'], release['organization_name'], article)
    

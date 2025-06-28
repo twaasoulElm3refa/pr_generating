@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from connection_test import check_mysql_connection,fetch_press_releases ,update_press_release
+from database import get_db_connection,fetch_press_releases ,update_press_release
 import os
 from dotenv import load_dotenv
 import uvicorn
@@ -9,10 +9,9 @@ app = FastAPI()
 
 load_dotenv()
 
-openai.api_key = os.getenv("openAI_API")
+openai.api_key = os.getenv("OPENAI_API_KEY")
 host = os.getenv("DB_HOST")
 port = os.getenv("DB_PORT")
-
 
 
 def generate_article_based_on_topic(topic,context,lines_number,):
@@ -35,7 +34,7 @@ def generate_article_based_on_topic(topic,context,lines_number,):
 
 @app.get("/no_about_article/{user_id}")
 async def no_about_article(user_id: str):
-    connection =check_mysql_connection()
+    connection =get_db_connection()
     if connection is None:
         print("Failed to establish database connection")  # connection test
     else:

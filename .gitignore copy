@@ -1,2 +1,6 @@
  - Copy.env
+# Ignore everything inside uploads folder
+uploads/*
 
+# But keep the .gitkeep file so folder itself stays in repo
+!uploads/.gitkeep

@@ -107,22 +107,12 @@ async def no_about_article(user_id: str):
 التقديم الطويل قبل الدخول في الخبر.
 """
         article = generate_article_based_on_topic(topic,context,release['press_lines_number'])
-        
-        print(article)
+      
     
         update_data= update_press_release(release['user_id'], release['organization_name'], article)
-        print("update_data",update_data)
-
-        user = release['user_id'] 
-        organization_name = release['organization_name']
-
-        saved_data = update_press_release(user, organization_name, article)
         
         connection.commit()
         connection.close()
 
     return {"article":article}
-
-if __name__ == "__main__":              
-    uvicorn.run(app, host=host, port=port)
 

@@ -3,3 +3,4 @@ mysql-connector-python==9.3.0  # Use the appropriate version if needed
 openai== 1.82.0       # Use the latest version if possible
 uvicorn
 python-dotenv
+PyJWT== 2.10.1

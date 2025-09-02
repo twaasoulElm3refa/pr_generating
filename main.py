@@ -1,19 +1,44 @@
-from fastapi import FastAPI
-from database import get_db_connection,fetch_press_releases ,update_press_release
-import os
+import os, uuid, time, jwt
+from typing import Optional, List
+
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+
 from dotenv import load_dotenv
-import uvicorn
-import openai
+from openai import OpenAI
 
-app = FastAPI()
+from database import get_db_connection, fetch_press_releases, update_press_release
 
+# -------------------------
+# App & environment
+# -------------------------
 load_dotenv()
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY", "")
+JWT_SECRET      = os.getenv("JWT_SECRET", "change-me")
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
 host = os.getenv("DB_HOST")
 port = os.getenv("DB_PORT")
 
+if not OPENAI_API_KEY:
+    raise RuntimeError("Missing OPENAI_API_KEY")
 
+client = OpenAI(api_key=OPENAI_API_KEY)
+app = FastAPI(title="Press API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS if ALLOWED_ORIGINS != ["*"] else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# -------------------------
+# Existing: generator
+# -------------------------
 def generate_article_based_on_topic(topic,context,release):
  
     # Create the prompt for GPT
@@ -41,7 +66,6 @@ release['organization_website']
                                               )
     
     return response.choices[0].message.content.strip()
-    
 
 @app.get("/generate_article/{user_id}")
 async def generate_article(user_id: str):
@@ -128,3 +152,95 @@ async def generate_article(user_id: str):
 
        return {"generated_content":article}
 
+# -------------------------
+# NEW: chat session + chat (streaming)
+# -------------------------
+
+# --- models for the new routes ---
+class SessionIn(BaseModel):
+    user_id: int
+    wp_nonce: Optional[str] = None
+
+class SessionOut(BaseModel):
+    session_id: str
+    token: str
+
+class VisibleValue(BaseModel):
+    id: Optional[int] = None
+    organization_name: Optional[str] = None
+    about_press: Optional[str] = None
+    press_date: Optional[str] = None
+
+class ChatIn(BaseModel):
+    session_id: str
+    user_id: int
+    message: str
+    visible_values: List[VisibleValue] = Field(default_factory=list)
+
+# --- helpers ---
+def _make_jwt(session_id: str, user_id: int) -> str:
+    payload = {
+        "sid": session_id,
+        "uid": user_id,
+        "iat": int(time.time()),
+        "exp": int(time.time()) + 60 * 60 * 2,  # 2 hours
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+def _verify_jwt(bearer: Optional[str]):
+    if not bearer or not bearer.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    token = bearer.split(" ", 1)[1]
+    try:
+        jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+def _values_to_context(values: List[VisibleValue]) -> str:
+    if not values:
+        return "لا توجد بيانات مرئية حالياً لهذا المستخدم."
+    v = values[0]
+    parts = []
+    if v.organization_name: parts.append(f"اسم المنظمة: {v.organization_name}")
+    if v.about_press:       parts.append(f"عن البيان: {v.about_press}")
+    if v.press_date:        parts.append(f"تاريخ البيان: {v.press_date}")
+    return " | ".join(parts) if parts else "لا توجد تفاصيل كافية."
+
+# --- routes ---
+@app.post("/session", response_model=SessionOut)
+def create_session(body: SessionIn):
+    sid = str(uuid.uuid4())
+    token = _make_jwt(sid, body.user_id)
+    return SessionOut(session_id=sid, token=token)
+
+@app.post("/chat")
+def chat(body: ChatIn, authorization: Optional[str] = Header(None)):
+    _verify_jwt(authorization)
+
+    context = _values_to_context(body.visible_values)
+    sys_prompt = (
+        "أنت مساعد موثوق يجيب بالاعتماد على البيانات المرئية الحالية للمستخدم. "
+        "إذا كانت المعلومة غير متوفرة في البيانات المرئية فاذكر ذلك صراحةً "
+        "واقترح ما يمكن فعله للحصول عليها.\n\n"
+        f"البيانات المرئية الحالية: {context}"
+    )
+
+    user_msg = body.message or ""
+
+    def stream():
+        # Chat Completions streaming
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.2,
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                {"role": "user",   "content": user_msg}
+            ],
+            stream=True
+        )
+        for chunk in response:
+            delta = getattr(chunk.choices[0].delta, "content", None) if chunk.choices else None
+            if delta:
+                yield delta
+
+    return StreamingResponse(stream(), media_type="text/plain")

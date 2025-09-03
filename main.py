@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from dotenv import load_dotenv
-from openai import OpenAI
+import openai 
 
 from database import get_db_connection, fetch_press_releases, update_press_release
 
@@ -25,7 +25,7 @@ port = os.getenv("DB_PORT")
 if not OPENAI_API_KEY:
     raise RuntimeError("Missing OPENAI_API_KEY")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 app = FastAPI(title="Press API")
 
 app.add_middleware(

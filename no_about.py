@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 
 from dotenv import load_dotenv
 import openai 
-
 from database import get_db_connection, fetch_press_releases, update_press_release
 
 # -------------------------

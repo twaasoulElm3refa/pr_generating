@@ -159,6 +159,14 @@ class VisibleValue(BaseModel):
     organization_name: Optional[str] = None
     about_press: Optional[str] = None
     press_date: Optional[str] = None
+    
+    # جديدة:
+    organization_phone: Optional[str] = None
+    organization_email: Optional[str] = None
+    organization_website: Optional[str] = None
+    about_organization: Optional[str] = None
+    press_lines_number: Optional[int] = None
+    article: Optional[str] = None  # النص الحالي للمقال (اختياري)
 
 class ChatIn(BaseModel):
     session_id: str
@@ -190,9 +198,20 @@ def _values_to_context(values: List[VisibleValue]) -> str:
         return "لا توجد بيانات مرئية حالياً لهذا المستخدم."
     v = values[0]
     parts = []
-    if v.organization_name: parts.append(f"اسم المنظمة: {v.organization_name}")
-    if v.about_press:       parts.append(f"عن البيان: {v.about_press}")
-    if v.press_date:        parts.append(f"تاريخ البيان: {v.press_date}")
+    if v.organization_name:    parts.append(f"اسم المنظمة: {v.organization_name}")
+    if v.about_press:          parts.append(f"عن البيان: {v.about_press}")
+    if v.press_date:           parts.append(f"تاريخ البيان: {v.press_date}")
+    if v.organization_phone:   parts.append(f"الهاتف: {v.organization_phone}")
+    if v.organization_email:   parts.append(f"البريد: {v.organization_email}")
+    if v.organization_website: parts.append(f"الموقع: {v.organization_website}")
+    if v.about_organization:   parts.append(f"حول المنظمة: {v.about_organization}")
+    if v.press_lines_number:   parts.append(f"عدد الأسطر المرغوب: {v.press_lines_number}")
+    # لا ترسل مقالات ضخمة بلا حد — قصّها لطول معقول
+    if v.article:
+        trimmed = v.article.strip()
+        if len(trimmed) > 1500:
+            trimmed = trimmed[:1500] + "…"
+        parts.append(f"النص الحالي للمقال: {trimmed}")
     return " | ".join(parts) if parts else "لا توجد تفاصيل كافية."
 
 # --- routes ---

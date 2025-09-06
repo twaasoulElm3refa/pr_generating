@@ -158,7 +158,6 @@ class VisibleValue(BaseModel):
     organization_name: Optional[str] = None
     about_press: Optional[str] = None
     press_date: Optional[str] = None
-    
     # جديدة:
     organization_phone: Optional[str] = None
     organization_email: Optional[str] = None
@@ -207,10 +206,8 @@ def _values_to_context(values: List[VisibleValue]) -> str:
     if v.press_lines_number:   parts.append(f"عدد الأسطر المرغوب: {v.press_lines_number}")
     # لا ترسل مقالات ضخمة بلا حد — قصّها لطول معقول
     if v.article:
-        trimmed = v.article.strip()
-        if len(trimmed) > 1500:
-            trimmed = trimmed[:1500] + "…"
-        parts.append(f"النص الحالي للمقال: {trimmed}")
+        article = v.article
+        parts.append(f"النص الحالي للمقال: {article}")
     return " | ".join(parts) if parts else "لا توجد تفاصيل كافية."
 
 # --- routes ---

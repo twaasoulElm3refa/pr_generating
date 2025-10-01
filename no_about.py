@@ -16,7 +16,7 @@ from database import get_db_connection, fetch_press_releases, update_press_relea
 load_dotenv()
 
 OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY", "")
-JWT_SECRET      = os.getenv("JWT_SECRET", "change-me")
+JWT_SECRET      = os.getenv("JWT_SECRET", "")
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
 host = os.getenv("DB_HOST")
 port = os.getenv("DB_PORT")

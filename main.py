@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from dotenv import load_dotenv
-import openai 
+from openai import OpenAI  # ← use the new SDK style
 
 from database import get_db_connection, fetch_press_releases, update_press_release
 
@@ -19,13 +19,15 @@ load_dotenv()
 OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY")
 JWT_SECRET      = os.getenv("JWT_SECRET")
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
-host = os.getenv("DB_HOST")
-port = os.getenv("DB_PORT")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
 
 if not OPENAI_API_KEY:
     raise RuntimeError("Missing OPENAI_API_KEY")
+if not JWT_SECRET:
+    raise RuntimeError("Missing JWT_SECRET")
 
-client = openai.OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI(api_key=OPENAI_API_KEY)
 app = FastAPI(title="Press API")
 
 app.add_middleware(
@@ -39,32 +41,33 @@ app.add_middleware(
 # -------------------------
 # Existing: generator
 # -------------------------
-def generate_article_based_on_topic(topic,context,release):
- 
-    # Create the prompt for GPT
-    prompt = f"""انت صحفي عربي محترف في مؤسسة إعلامية بارزة ,متخصص فى كتابة البيانات الصحفية فى مختلف المواضيع بلغة عربية فصيحة ودقيقه .
-    حيث يكون البيان بصيغة "تعلن شركة ..."وليس "اعلنت" وهكذا حيث تكون الصيغه على لسان المؤسسة مع الالتزام بالبيانات والتفاصيلئ الممنوحة اليك وصياغتها فى صوره بيان
-    مع الالتزام بعدد الاسطر   release['press_lines_number']
-    حيث يكون تكوين البيان :
-    بدايه البيان العنوان الرئيسي و تاريخ اليوم حسب الوطن العربي 
-     معتمدا فيه على {topic} release['press_date'] ثم محتوى البيان 
-   "ثم كلمة "معلومات للمحررين
-   "ثممباشرة فى السطر التالي كلمة "حول الشركة
-   release['about_organization'] ثم 
-فى نهايه البيان بيانات التواصل من تليفون و ايميل وموقع المؤسسة دون تاليف
-release['organization_phone']
-release['organization_email']
-release['organization_website']
- استخدم المعلومات التالية كنموذج لكيقية صياغه البيان :
-    {context}
- """  
-   
+def generate_article_based_on_topic(topic: str, context: str, release: dict) -> str:
+    # Build a clean prompt with proper interpolation
+    prompt = f"""
+أنت صحفي عربي محترف في مؤسسة إعلامية بارزة، متخصص في كتابة البيانات الصحفية بلغة عربية فصيحة ودقيقة.
+اكتب البيان بصيغة "تعلن شركة ..." وليس "أعلنت"، بصوت المؤسسة، والتزم بالبيانات والتفاصيل الممنوحة وصغها في صورة بيان.
+عدد الأسطر المطلوب: {release.get('press_lines_number', 'غير محدد')}
+
+تكوين البيان:
+- العنوان الرئيسي + تاريخ اليوم بصيغة الوطن العربي.
+- اعتمادًا على موضوع: {topic} بتاريخ: {release.get('press_date', 'غير محدد')}
+- محتوى البيان.
+- ثم مباشرة السطر "معلومات للمحررين".
+- ثم في السطر التالي "حول الشركة": {release.get('about_organization', 'غير متوفر')}.
+- وفي نهاية البيان بيانات التواصل دون تأليف:
+  الهاتف: {release.get('organization_phone', 'غير متوفر')}
+  البريد الإلكتروني: {release.get('organization_email', 'غير متوفر')}
+  الموقع: {release.get('organization_website', 'غير متوفر')}
+
+استخدم المعلومات التالية كنموذج لكيفية صياغة البيان (إرشادات بنية وصياغة):
+{context}
+""".strip()
+
     # Get response from OpenAI
-    response  = openai.chat.completions.create(model="gpt-4o-mini",
-                                               store=True,
-                                               messages=[{"role": "user", "content": prompt}]
-                                              )
-    
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+    )
     return response.choices[0].message.content.strip()
 
 @app.get("/generate_article/{user_id}")
@@ -75,13 +78,26 @@ async def generate_article(user_id: str):
 
     all_release = fetch_press_releases(user_session_id)
     if not all_release:
-       return {"error": "قائمة الإصدارات فارغة. لا يوجد بيانات."}
-       
+        cursor.close()
+        connection.close()
+        return {"error": "قائمة الإصدارات فارغة. لا يوجد بيانات."}
     else:
-       release = all_release[-1]
-       # Prepare the Arabic prompt
-       topic = f"اكتب بيان للشركة {release['organization_name']} حيث محتوى البيان عن {release['about_press']} وبيانات التواصل {release['organization_phone'],release['organization_email'],release['organization_website']} بتاريخ {release['press_date']} واذكر حول الشركه فى النهايه{release['about_organization']} ويكون عدد الاسطر {release['press_lines_number']}"
-       context = f""" (Press Release Structure) الجزء الأول: الهيكلية العامة للبيان الصحفي
+        release = all_release[-1]
+        # Prepare the Arabic prompt inputs
+        topic = (
+            f"اكتب بيان للشركة {release.get('organization_name', 'غير محدد')} "
+            f"حيث محتوى البيان عن {release.get('about_press', 'غير محدد')} "
+            f"وبيانات التواصل "
+            f"{release.get('organization_phone', 'غير متوفر')}, "
+            f"{release.get('organization_email', 'غير متوفر')}, "
+            f"{release.get('organization_website', 'غير متوفر')} "
+            f"بتاريخ {release.get('press_date', 'غير محدد')} "
+            f"واذكر «حول الشركة» في النهاية: {release.get('about_organization', 'غير متوفر')} "
+            f"ويكون عدد الأسطر {release.get('press_lines_number', 'غير محدد')}"
+        )
+        
+        topic = f"اكتب بيان للشركة {release['organization_name']} حيث محتوى البيان عن {release['about_press']} وبيانات التواصل {release['organization_phone'],release['organization_email'],release['organization_website']} بتاريخ {release['press_date']} واذكر حول الشركه فى النهايه{release['about_organization']} ويكون عدد الاسطر {release['press_lines_number']}"
+        context = f""" (Press Release Structure) الجزء الأول: الهيكلية العامة للبيان الصحفي
            1.	العنوان الرئيسي (Headline)
           الوظيفة: يجذب انتباه الصحفي والقارئ في أقل من 5 ثوانٍ.
           السمات: مباشر، مختصر، خبري، دون مبالغة، يعكس جوهر البيان.
@@ -141,14 +157,15 @@ async def generate_article(user_id: str):
           استخدام "نحن" أو ضمير المتكلم.
           التقديم الطويل قبل الدخول في الخبر.
           """
-       article = generate_article_based_on_topic(topic,context, release)
-       update_data= update_press_release(release['user_id'], release['organization_name'], article)
-   
-       connection.commit()
-       cursor.close()
-       connection.close()
 
-    return {"generated_content":article}
+        article = generate_article_based_on_topic(topic, context, release)
+        update_press_release(release['user_id'], release['organization_name'], article)
+
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return {"generated_content": article}
 
 # -------------------------
 # NEW: chat session + chat (streaming)
@@ -168,6 +185,13 @@ class VisibleValue(BaseModel):
     organization_name: Optional[str] = None
     about_press: Optional[str] = None
     press_date: Optional[str] = None
+    # fields referenced in _values_to_context:
+    organization_phone: Optional[str] = None
+    organization_email: Optional[str] = None
+    organization_website: Optional[str] = None
+    about_organization: Optional[str] = None
+    press_lines_number: Optional[str] = None
+    article: Optional[str] = None
 
 class ChatIn(BaseModel):
     session_id: str
@@ -198,19 +222,29 @@ def _values_to_context(values: List[VisibleValue]) -> str:
     if not values:
         return "لا توجد بيانات مرئية حالياً لهذا المستخدم."
     v = values[0]
-    parts = []
-    if v.organization_name:    parts.append(f"اسم المنظمة: {v.organization_name}")
-    if v.about_press:          parts.append(f"عن البيان: {v.about_press}")
-    if v.press_date:           parts.append(f"تاريخ البيان: {v.press_date}")
-    if v.organization_phone:   parts.append(f"الهاتف: {v.organization_phone}")
-    if v.organization_email:   parts.append(f"البريد: {v.organization_email}")
-    if v.organization_website: parts.append(f"الموقع: {v.organization_website}")
-    if v.about_organization:   parts.append(f"حول المنظمة: {v.about_organization}")
-    if v.press_lines_number:   parts.append(f"عدد الأسطر المرغوب: {v.press_lines_number}")
+    parts: List[str] = []
+    if v.organization_name:
+        parts.append(f"اسم المنظمة: {v.organization_name}")
+    if v.about_press:
+        parts.append(f"عن البيان: {v.about_press}")
+    if v.press_date:
+        parts.append(f"تاريخ البيان: {v.press_date}")
+    if v.organization_phone:
+        parts.append(f"الهاتف: {v.organization_phone}")
+    if v.organization_email:
+        parts.append(f"البريد: {v.organization_email}")
+    if v.organization_website:
+        parts.append(f"الموقع: {v.organization_website}")
+    if v.about_organization:
+        parts.append(f"حول المنظمة: {v.about_organization}")
+    if v.press_lines_number:
+        parts.append(f"عدد الأسطر المرغوب: {v.press_lines_number}")
     if v.article:
-    article = v.article
-    parts.append(f"النص الحالي للمقال: {article}")
-    # لا ترسل مقالات ضخمة بلا حد — قصّها لطول معقول
+        article = v.article
+        # قص المقال إذا كان طويلاً جداً
+        if len(article) > 1200:
+            article = article[:1200] + "…"
+        parts.append(f"النص الحالي للمقال: {article}")
     return " | ".join(parts) if parts else "لا توجد تفاصيل كافية."
 
 # --- routes ---
@@ -246,8 +280,7 @@ def chat(body: ChatIn, authorization: Optional[str] = Header(None)):
             stream=True
         )
         for chunk in response:
-            delta = getattr(chunk.choices[0].delta, "content", None) if chunk.choices else None
-            if delta:
-                yield delta
+            if chunk.choices and getattr(chunk.choices[0].delta, "content", None):
+                yield chunk.choices[0].delta.content
 
     return StreamingResponse(stream(), media_type="text/plain")

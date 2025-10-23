@@ -148,7 +148,7 @@ async def generate_article(user_id: str):
        cursor.close()
        connection.close()
 
-   return {"generated_content":article}
+    return {"generated_content":article}
 
 # -------------------------
 # NEW: chat session + chat (streaming)

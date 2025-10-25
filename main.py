@@ -1,5 +1,5 @@
 import os, uuid, time, jwt
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,9 +18,8 @@ load_dotenv()
 
 OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY")
 JWT_SECRET      = os.getenv("JWT_SECRET")
-ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
-if not ALLOWED_ORIGINS:
-    ALLOWED_ORIGINS = ["*"]
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()] or ["*"]
+PR_FORM_TABLE   = os.getenv("PR_FORM_TABLE", "press_release_Form")  # must match exact table name
 
 if not OPENAI_API_KEY:
     raise RuntimeError("Missing OPENAI_API_KEY")
@@ -39,49 +38,30 @@ app.add_middleware(
 )
 
 # -------------------------
-# Generator
+# DB helper (fetch specific row by rid)
 # -------------------------
-def generate_article_based_on_topic(topic: str, context: str, release: dict) -> str:
-     prompt = f"""
-أنت صحفي عربي محترف في مؤسسة إعلامية بارزة، متخصص في كتابة البيانات الصحفية بلغة عربية فصيحة ودقيقة.
-اكتب البيان بصيغة "تعلن شركة ..." وليس "أعلنت"، بصوت المؤسسة، والتزم بالبيانات والتفاصيل الممنوحة وصغها في صورة بيان.
-عدد الأسطر المطلوب: {release.get('press_lines_number', 'غير محدد')}
-
-تكوين البيان:
-- العنوان الرئيسي + تاريخ اليوم بصيغة الوطن العربي.
-- اعتمادًا على موضوع: {topic} بتاريخ: {release.get('press_date', 'غير محدد')}
-- محتوى البيان.
-- ثم مباشرة السطر "معلومات للمحررين".
-- ثم في السطر التالي "حول الشركة": {release.get('about_organization', 'غير متوفر')}.
-- وفي نهاية البيان بيانات التواصل دون تأليف:
-  الهاتف: {release.get('organization_phone', 'غير متوفر')}
-  البريد الإلكتروني: {release.get('organization_email', 'غير متوفر')}
-  الموقع: {release.get('organization_website', 'غير متوفر')}
-
-استخدم المعلومات التالية كنموذج لكيفية صياغة البيان (إرشادات بنية وصياغة):
-{context}
-""".strip()
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.choices[0].message.content.strip()
-
-@app.get("/generate_article/{user_id}")
-async def generate_article(user_id: str):
+def _fetch_release_by_id(rid: int) -> Optional[Dict[str, Any]]:
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
     try:
-        rows = fetch_press_releases(user_id)  # must include the source row 'id'
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"DB fetch error: {e}")
+        cur.execute(f"""
+            SELECT id, user_id, organization_name, about_press, about_organization,
+                   organization_website, organization_phone, organization_email,
+                   press_lines_number, press_date
+            FROM {PR_FORM_TABLE}
+            WHERE id = %s
+            LIMIT 1
+        """, (rid,))
+        return cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
 
-    if not rows:
-        return {"error": "قائمة الإصدارات فارغة. لا يوجد بيانات."}
-
-    release = rows[-1]
-    request_id = release.get("id")  # the source row id in press_release_Form
-
-    topic = (
+# -------------------------
+# Prompt helpers
+# -------------------------
+def _build_topic(release: Dict[str, Any]) -> str:
+    return (
         f"اكتب بيان للشركة {release.get('organization_name', 'غير محدد')} "
         f"حيث محتوى البيان عن {release.get('about_press', 'غير محدد')} "
         f"وبيانات التواصل "
@@ -92,7 +72,9 @@ async def generate_article(user_id: str):
         f"واذكر «حول الشركة» في النهاية: {release.get('about_organization', 'غير متوفر')} "
         f"ويكون عدد الأسطر {release.get('press_lines_number', 'غير محدد')}"
     )
-    context = f""" (Press Release Structure) الجزء الأول: الهيكلية العامة للبيان الصحفي
+
+def _default_context() -> str:
+    return f""" (Press Release Structure) الجزء الأول: الهيكلية العامة للبيان الصحفي
            1.	العنوان الرئيسي (Headline)
           الوظيفة: يجذب انتباه الصحفي والقارئ في أقل من 5 ثوانٍ.
           السمات: مباشر، مختصر، خبري، دون مبالغة، يعكس جوهر البيان.
@@ -152,6 +134,52 @@ async def generate_article(user_id: str):
           استخدام "نحن" أو ضمير المتكلم.
           التقديم الطويل قبل الدخول في الخبر.
           """
+    
+def generate_article_based_on_topic(topic: str, context: str, release: dict) -> str:
+    prompt = f"""
+أنت صحفي عربي محترف في مؤسسة إعلامية بارزة، متخصص في كتابة البيانات الصحفية بلغة عربية فصيحة ودقيقة.
+اكتب البيان بصيغة "تعلن شركة ..." وليس "أعلنت"، بصوت المؤسسة، والتزم بالبيانات والتفاصيل الممنوحة وصغها في صورة بيان.
+عدد الأسطر المطلوب: {release.get('press_lines_number', 'غير محدد')}
+
+تكوين البيان:
+- العنوان الرئيسي + تاريخ اليوم بصيغة الوطن العربي.
+- اعتمادًا على موضوع: {topic} بتاريخ: {release.get('press_date', 'غير محدد')}
+- محتوى البيان.
+- ثم مباشرة السطر "معلومات للمحررين".
+- ثم في السطر التالي "حول الشركة": {release.get('about_organization', 'غير متوفر')}.
+- وفي نهاية البيان بيانات التواصل دون تأليف:
+  الهاتف: {release.get('organization_phone', 'غير متوفر')}
+  البريد الإلكتروني: {release.get('organization_email', 'غير متوفر')}
+  الموقع: {release.get('organization_website', 'غير متوفر')}
+
+استخدم المعلومات التالية كنموذج لكيفية صياغة البيان (إرشادات بنية وصياغة):
+{context}
+""".strip()
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.choices[0].message.content.strip()
+
+# -------------------------
+# Generate: latest row by user
+# -------------------------
+@app.get("/generate_article/{user_id}")
+async def generate_article(user_id: str):
+    try:
+        rows = fetch_press_releases(user_id)  # must include 'id' in rows
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DB fetch error: {e}")
+
+    if not rows:
+        return {"error": "قائمة الإصدارات فارغة. لا يوجد بيانات."}
+
+    release = rows[-1]
+    request_id = release.get("id")
+
+    topic = _build_topic(release)
+    context = _default_context()
 
     try:
         article = generate_article_based_on_topic(topic, context, release)
@@ -166,7 +194,38 @@ async def generate_article(user_id: str):
             request_id=request_id,
         )
     except Exception as e:
-        # still return article even if DB save failed
+        return {"generated_content": article, "warning": f"DB update failed: {e}", "request_id": request_id}
+
+    return {"generated_content": article, "request_id": request_id}
+
+# -------------------------
+# Generate: by rid (exact row)
+# -------------------------
+@app.get("/generate_article_by_rid/{rid}")
+async def generate_article_by_rid(rid: int):
+    row = _fetch_release_by_id(rid)
+    if not row:
+        raise HTTPException(status_code=404, detail="لم يتم العثور على هذا الطلب.")
+
+    release = row
+    request_id = release.get("id")
+
+    topic = _build_topic(release)
+    context = _default_context()
+
+    try:
+        article = generate_article_based_on_topic(topic, context, release)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM error: {e}")
+
+    try:
+        update_press_release(
+            user_id=release["user_id"],
+            organization_name=release.get("organization_name", ""),
+            article=article,
+            request_id=request_id,
+        )
+    except Exception as e:
         return {"generated_content": article, "warning": f"DB update failed: {e}", "request_id": request_id}
 
     return {"generated_content": article, "request_id": request_id}
@@ -183,7 +242,7 @@ class SessionOut(BaseModel):
     token: str
 
 class VisibleValue(BaseModel):
-    id: Optional[int] = None            # = request_id from press_release_Form
+    id: Optional[int] = None            # = request_id
     request_id: Optional[int] = None    # alias
     organization_name: Optional[str] = None
     about_press: Optional[str] = None
@@ -225,15 +284,15 @@ def _values_to_context(values: List[VisibleValue]) -> str:
     v = values[0]
     parts: List[str] = []
     rid = v.request_id or v.id
-    if rid:                        parts.append(f"رقم الطلب: {rid}")
-    if v.organization_name:        parts.append(f"اسم المنظمة: {v.organization_name}")
-    if v.about_press:              parts.append(f"عن البيان: {v.about_press}")
-    if v.press_date:               parts.append(f"تاريخ البيان: {v.press_date}")
-    if v.organization_phone:       parts.append(f"الهاتف: {v.organization_phone}")
-    if v.organization_email:       parts.append(f"البريد: {v.organization_email}")
-    if v.organization_website:     parts.append(f"الموقع: {v.organization_website}")
-    if v.about_organization:       parts.append(f"حول المنظمة: {v.about_organization}")
-    if v.press_lines_number:       parts.append(f"عدد الأسطر المرغوب: {v.press_lines_number}")
+    if rid:                    parts.append(f"رقم الطلب: {rid}")
+    if v.organization_name:    parts.append(f"اسم المنظمة: {v.organization_name}")
+    if v.about_press:          parts.append(f"عن البيان: {v.about_press}")
+    if v.press_date:           parts.append(f"تاريخ البيان: {v.press_date}")
+    if v.organization_phone:   parts.append(f"الهاتف: {v.organization_phone}")
+    if v.organization_email:   parts.append(f"البريد: {v.organization_email}")
+    if v.organization_website: parts.append(f"الموقع: {v.organization_website}")
+    if v.about_organization:   parts.append(f"حول المنظمة: {v.about_organization}")
+    if v.press_lines_number:   parts.append(f"عدد الأسطر المرغوب: {v.press_lines_number}")
     if v.article:
         article = v.article
         if len(article) > 1200:

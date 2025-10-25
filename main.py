@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from dotenv import load_dotenv
-from openai import OpenAI  # ← use the new SDK style
+from openai import OpenAI
 
 from database import get_db_connection, fetch_press_releases, update_press_release
 
@@ -19,8 +19,8 @@ load_dotenv()
 OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY")
 JWT_SECRET      = os.getenv("JWT_SECRET")
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT")
+if not ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS = ["*"]
 
 if not OPENAI_API_KEY:
     raise RuntimeError("Missing OPENAI_API_KEY")
@@ -39,11 +39,10 @@ app.add_middleware(
 )
 
 # -------------------------
-# Existing: generator
+# Generator
 # -------------------------
 def generate_article_based_on_topic(topic: str, context: str, release: dict) -> str:
-    # Build a clean prompt with proper interpolation
-    prompt = f"""
+     prompt = f"""
 أنت صحفي عربي محترف في مؤسسة إعلامية بارزة، متخصص في كتابة البيانات الصحفية بلغة عربية فصيحة ودقيقة.
 اكتب البيان بصيغة "تعلن شركة ..." وليس "أعلنت"، بصوت المؤسسة، والتزم بالبيانات والتفاصيل الممنوحة وصغها في صورة بيان.
 عدد الأسطر المطلوب: {release.get('press_lines_number', 'غير محدد')}
@@ -63,7 +62,6 @@ def generate_article_based_on_topic(topic: str, context: str, release: dict) -> 
 {context}
 """.strip()
 
-    # Get response from OpenAI
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
@@ -72,32 +70,29 @@ def generate_article_based_on_topic(topic: str, context: str, release: dict) -> 
 
 @app.get("/generate_article/{user_id}")
 async def generate_article(user_id: str):
-    connection = get_db_connection()
-    cursor = connection.cursor(dictionary=True)
-    user_session_id = user_id
+    try:
+        rows = fetch_press_releases(user_id)  # must include the source row 'id'
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DB fetch error: {e}")
 
-    all_release = fetch_press_releases(user_session_id)
-    if not all_release:
-        cursor.close()
-        connection.close()
+    if not rows:
         return {"error": "قائمة الإصدارات فارغة. لا يوجد بيانات."}
-    else:
-        release = all_release[-1]
-        # Prepare the Arabic prompt inputs
-        topic = (
-            f"اكتب بيان للشركة {release.get('organization_name', 'غير محدد')} "
-            f"حيث محتوى البيان عن {release.get('about_press', 'غير محدد')} "
-            f"وبيانات التواصل "
-            f"{release.get('organization_phone', 'غير متوفر')}, "
-            f"{release.get('organization_email', 'غير متوفر')}, "
-            f"{release.get('organization_website', 'غير متوفر')} "
-            f"بتاريخ {release.get('press_date', 'غير محدد')} "
-            f"واذكر «حول الشركة» في النهاية: {release.get('about_organization', 'غير متوفر')} "
-            f"ويكون عدد الأسطر {release.get('press_lines_number', 'غير محدد')}"
-        )
-        
-        topic = f"اكتب بيان للشركة {release['organization_name']} حيث محتوى البيان عن {release['about_press']} وبيانات التواصل {release['organization_phone'],release['organization_email'],release['organization_website']} بتاريخ {release['press_date']} واذكر حول الشركه فى النهايه{release['about_organization']} ويكون عدد الاسطر {release['press_lines_number']}"
-        context = f""" (Press Release Structure) الجزء الأول: الهيكلية العامة للبيان الصحفي
+
+    release = rows[-1]
+    request_id = release.get("id")  # the source row id in press_release_Form
+
+    topic = (
+        f"اكتب بيان للشركة {release.get('organization_name', 'غير محدد')} "
+        f"حيث محتوى البيان عن {release.get('about_press', 'غير محدد')} "
+        f"وبيانات التواصل "
+        f"{release.get('organization_phone', 'غير متوفر')}, "
+        f"{release.get('organization_email', 'غير متوفر')}, "
+        f"{release.get('organization_website', 'غير متوفر')} "
+        f"بتاريخ {release.get('press_date', 'غير محدد')} "
+        f"واذكر «حول الشركة» في النهاية: {release.get('about_organization', 'غير متوفر')} "
+        f"ويكون عدد الأسطر {release.get('press_lines_number', 'غير محدد')}"
+    )
+    context = f""" (Press Release Structure) الجزء الأول: الهيكلية العامة للبيان الصحفي
            1.	العنوان الرئيسي (Headline)
           الوظيفة: يجذب انتباه الصحفي والقارئ في أقل من 5 ثوانٍ.
           السمات: مباشر، مختصر، خبري، دون مبالغة، يعكس جوهر البيان.
@@ -158,20 +153,27 @@ async def generate_article(user_id: str):
           التقديم الطويل قبل الدخول في الخبر.
           """
 
+    try:
         article = generate_article_based_on_topic(topic, context, release)
-        update_press_release(release['user_id'], release['organization_name'], article)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM error: {e}")
 
-        connection.commit()
-        cursor.close()
-        connection.close()
+    try:
+        update_press_release(
+            user_id=release["user_id"],
+            organization_name=release.get("organization_name", ""),
+            article=article,
+            request_id=request_id,
+        )
+    except Exception as e:
+        # still return article even if DB save failed
+        return {"generated_content": article, "warning": f"DB update failed: {e}", "request_id": request_id}
 
-        return {"generated_content": article}
+    return {"generated_content": article, "request_id": request_id}
 
 # -------------------------
-# NEW: chat session + chat (streaming)
+# Chat (session + streaming)
 # -------------------------
-
-# --- models for the new routes ---
 class SessionIn(BaseModel):
     user_id: int
     wp_nonce: Optional[str] = None
@@ -181,11 +183,11 @@ class SessionOut(BaseModel):
     token: str
 
 class VisibleValue(BaseModel):
-    id: Optional[int] = None
+    id: Optional[int] = None            # = request_id from press_release_Form
+    request_id: Optional[int] = None    # alias
     organization_name: Optional[str] = None
     about_press: Optional[str] = None
     press_date: Optional[str] = None
-    # fields referenced in _values_to_context:
     organization_phone: Optional[str] = None
     organization_email: Optional[str] = None
     organization_website: Optional[str] = None
@@ -199,13 +201,12 @@ class ChatIn(BaseModel):
     message: str
     visible_values: List[VisibleValue] = Field(default_factory=list)
 
-# --- helpers ---
 def _make_jwt(session_id: str, user_id: int) -> str:
     payload = {
         "sid": session_id,
         "uid": user_id,
         "iat": int(time.time()),
-        "exp": int(time.time()) + 60 * 60 * 2,  # 2 hours
+        "exp": int(time.time()) + 60 * 60 * 2,
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
@@ -223,31 +224,23 @@ def _values_to_context(values: List[VisibleValue]) -> str:
         return "لا توجد بيانات مرئية حالياً لهذا المستخدم."
     v = values[0]
     parts: List[str] = []
-    if v.organization_name:
-        parts.append(f"اسم المنظمة: {v.organization_name}")
-    if v.about_press:
-        parts.append(f"عن البيان: {v.about_press}")
-    if v.press_date:
-        parts.append(f"تاريخ البيان: {v.press_date}")
-    if v.organization_phone:
-        parts.append(f"الهاتف: {v.organization_phone}")
-    if v.organization_email:
-        parts.append(f"البريد: {v.organization_email}")
-    if v.organization_website:
-        parts.append(f"الموقع: {v.organization_website}")
-    if v.about_organization:
-        parts.append(f"حول المنظمة: {v.about_organization}")
-    if v.press_lines_number:
-        parts.append(f"عدد الأسطر المرغوب: {v.press_lines_number}")
+    rid = v.request_id or v.id
+    if rid:                        parts.append(f"رقم الطلب: {rid}")
+    if v.organization_name:        parts.append(f"اسم المنظمة: {v.organization_name}")
+    if v.about_press:              parts.append(f"عن البيان: {v.about_press}")
+    if v.press_date:               parts.append(f"تاريخ البيان: {v.press_date}")
+    if v.organization_phone:       parts.append(f"الهاتف: {v.organization_phone}")
+    if v.organization_email:       parts.append(f"البريد: {v.organization_email}")
+    if v.organization_website:     parts.append(f"الموقع: {v.organization_website}")
+    if v.about_organization:       parts.append(f"حول المنظمة: {v.about_organization}")
+    if v.press_lines_number:       parts.append(f"عدد الأسطر المرغوب: {v.press_lines_number}")
     if v.article:
         article = v.article
-        # قص المقال إذا كان طويلاً جداً
         if len(article) > 1200:
             article = article[:1200] + "…"
         parts.append(f"النص الحالي للمقال: {article}")
     return " | ".join(parts) if parts else "لا توجد تفاصيل كافية."
 
-# --- routes ---
 @app.post("/session", response_model=SessionOut)
 def create_session(body: SessionIn):
     sid = str(uuid.uuid4())
@@ -257,7 +250,6 @@ def create_session(body: SessionIn):
 @app.post("/chat")
 def chat(body: ChatIn, authorization: Optional[str] = Header(None)):
     _verify_jwt(authorization)
-
     context = _values_to_context(body.visible_values)
     sys_prompt = (
         "أنت مساعد موثوق يجيب بالاعتماد على البيانات المرئية الحالية للمستخدم. "
@@ -265,11 +257,9 @@ def chat(body: ChatIn, authorization: Optional[str] = Header(None)):
         "واقترح ما يمكن فعله للحصول عليها.\n\n"
         f"البيانات المرئية الحالية: {context}"
     )
-
     user_msg = body.message or ""
 
     def stream():
-        # Chat Completions streaming
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             temperature=0.7,

@@ -13,8 +13,6 @@ db_user = os.getenv("DB_USER")
 db_password = os.getenv("DB_PASSWORD")
 db_name = os.getenv("DB_NAME")
 
-
-
 def get_db_connection():
     try:
         connection = mysql.connector.connect(
@@ -60,29 +58,31 @@ def fetch_press_releases(user_id: str ):
             cursor.close()
             connection.close()
 
-
-
-def update_press_release(user_id, organization_name, article):
+def update_press_release(user_id: int, organization_name: str, article: str, request_id: int):
+    """
+    Ensure a single row per (user_id, request_id) in `articles`.
+    Requires a UNIQUE KEY on (user_id, request_id).
+    """
     connection = get_db_connection()
     if connection is None:
         return False
-    
     try:
         cursor = connection.cursor()
         query = """
-        INSERT INTO wpl3_articles (user_id, organization_name, article)
-        VALUES (%s, %s, %s)
-        ON DUPLICATE KEY UPDATE article = VALUES(article)
+        INSERT INTO wpl3_articles (request_id, user_id, organization_name, article, date, time)
+            VALUES (%s, %s, %s, %s, CURRENT_DATE(), CURRENT_TIME())
+            ON DUPLICATE KEY UPDATE article = VALUES(article)
         """
-        cursor.execute(query, (user_id, organization_name, article))
+        cursor.execute(query, (request_id, user_id, organization_name or '', article or ''))
         connection.commit()
         return True
+        
     except Error as e:
         print(f"Error updating data: {e}")
         return False
+        
     finally:
         if connection.is_connected():
             cursor.close()
             connection.close()
-
 

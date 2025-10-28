@@ -62,7 +62,7 @@ def fetch_press_releases(user_id: str ):
 
 
 
-def update_press_release(user_id, organization_name, article):
+def update_press_release(user_id, organization_name, article,request_id):
     connection = get_db_connection()
     if connection is None:
         return False
@@ -70,11 +70,11 @@ def update_press_release(user_id, organization_name, article):
     try:
         cursor = connection.cursor()
         query = """
-        INSERT INTO wpl3_articles (user_id, organization_name, article)
+        INSERT INTO wpl3_articles (request_id,user_id, organization_name, article)
         VALUES (%s, %s, %s)
         ON DUPLICATE KEY UPDATE article = VALUES(article)
         """
-        cursor.execute(query, (user_id, organization_name, article))
+        cursor.execute(query, (request_id,user_id, organization_name, article))
         connection.commit()
         return True
     except Error as e:

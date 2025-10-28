@@ -3,6 +3,7 @@ from mysql.connector import Error
 from datetime import timedelta
 from dotenv import load_dotenv
 import os
+from typing import Optional, List, Dict, Any
 
 load_dotenv()  # يبحث عن .env في مجلد المشروع الحالي
 

@@ -32,7 +32,24 @@ def get_db_connection():
         print(f"Error connecting to MySQL: {e}")
         return None
 
-def fetch_press_releases(user_id: str ):
+def _fetch_release_by_id(rid: int) -> Optional[Dict[str, Any]]:
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
+    try:
+        cursor.execute(f"""
+            SELECT id, user_id, organization_name, about_press, about_organization,
+                   organization_website, organization_phone, organization_email,
+                   press_lines_number, press_date
+            FROM {PR_FORM_TABLE}
+            WHERE id = %s
+            LIMIT 1
+        """, (rid,))
+        return cursor.fetchone()
+    finally:
+        cursor.close()
+        connection.close()
+        
+'''def fetch_press_releases(user_id: str ):
     connection = get_db_connection()
     if connection is None:
         print("Failed to establish database connection")
@@ -58,9 +75,7 @@ def fetch_press_releases(user_id: str ):
     finally:
         if connection.is_connected():
             cursor.close()
-            connection.close()
-
-
+            connection.close()'''
 
 def update_press_release(user_id, organization_name, article,request_id):
     connection = get_db_connection()

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from database import get_db_connection, fetch_press_releases, update_press_release
+from database import get_db_connection, _fetch_release_by_id, update_press_release
 
 # -------------------------
 # App & environment
@@ -38,26 +38,6 @@ app.add_middleware(
 )
 
 # -------------------------
-# DB helper (fetch specific row by rid)
-# -------------------------
-def _fetch_release_by_id(rid: int) -> Optional[Dict[str, Any]]:
-    conn = get_db_connection()
-    cur = conn.cursor(dictionary=True)
-    try:
-        cur.execute(f"""
-            SELECT id, user_id, organization_name, about_press, about_organization,
-                   organization_website, organization_phone, organization_email,
-                   press_lines_number, press_date
-            FROM {PR_FORM_TABLE}
-            WHERE id = %s
-            LIMIT 1
-        """, (rid,))
-        return cur.fetchone()
-    finally:
-        cur.close()
-        conn.close()
-
-# -------------------------
 # Prompt helpers
 # -------------------------
 def _build_topic(release: Dict[str, Any]) -> str:
@@ -74,7 +54,8 @@ def _build_topic(release: Dict[str, Any]) -> str:
     )
 
 def _default_context() -> str:
-    return f""" (Press Release Structure) الجزء الأول: الهيكلية العامة للبيان الصحفي
+    return f""" اترك سطر بين كل نقطة والعنوان 
+    (Press Release Structure) الجزء الأول: الهيكلية العامة للبيان الصحفي
            1.	 فى سطر منفرد العنوان الرئيسي (Headline)
           الوظيفة: يجذب انتباه الصحفي والقارئ في أقل من 5 ثوانٍ.
           السمات: مباشر، مختصر، خبري، دون مبالغة، يعكس جوهر البيان.
@@ -166,7 +147,7 @@ def generate_article_based_on_topic(topic: str, context: str, release: dict) -> 
 # -------------------------
 # Generate: latest row by user
 # -------------------------
-@app.get("/generate_article/{user_id}")
+'''@app.get("/generate_article/{user_id}")
 async def generate_article(user_id: str):
     try:
         rows = fetch_press_releases(user_id)  # must include 'id' in rows
@@ -197,7 +178,7 @@ async def generate_article(user_id: str):
     except Exception as e:
         return {"generated_content": article, "warning": f"DB update failed: {e}", "request_id": request_id}
 
-    return {"generated_content": article, "request_id": request_id}
+    return {"generated_content": article, "request_id": request_id}'''
 
 # -------------------------
 # Generate: by rid (exact row)

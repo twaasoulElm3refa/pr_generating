@@ -19,7 +19,7 @@ load_dotenv()
 OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY")
 JWT_SECRET      = os.getenv("JWT_SECRET")
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()] or ["*"]
-PR_FORM_TABLE   = os.getenv("PR_FORM_TABLE", "press_release_Form")  # must match exact table name
+#PR_FORM_TABLE   = os.getenv("PR_FORM_TABLE", "press_release_Form")  # must match exact table name
 
 if not OPENAI_API_KEY:
     raise RuntimeError("Missing OPENAI_API_KEY")

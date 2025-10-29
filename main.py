@@ -147,7 +147,7 @@ def generate_article_based_on_topic(topic: str, context: str, release: dict) -> 
 # -------------------------
 # Generate: latest row by user
 # -------------------------
-'''@app.get("/generate_article/{user_id}")
+@app.get("/generate_article/{user_id}")
 async def generate_article(user_id: str):
     try:
         rows = fetch_press_releases(user_id)  # must include 'id' in rows
@@ -178,7 +178,7 @@ async def generate_article(user_id: str):
     except Exception as e:
         return {"generated_content": article, "warning": f"DB update failed: {e}", "request_id": request_id}
 
-    return {"generated_content": article, "request_id": request_id}'''
+    return {"generated_content": article, "request_id": request_id}
 
 # -------------------------
 # Generate: by rid (exact row)

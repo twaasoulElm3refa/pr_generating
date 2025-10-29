@@ -41,7 +41,7 @@ def _fetch_release_by_id(rid: int) -> Optional[Dict[str, Any]]:
             SELECT id, user_id, organization_name, about_press, about_organization,
                    organization_website, organization_phone, organization_email,
                    press_lines_number, press_date
-            FROM {PR_FORM_TABLE}
+            FROM wpl3_press_release_Form
             WHERE id = %s
             LIMIT 1
         """, (rid,))

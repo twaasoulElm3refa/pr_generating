@@ -110,7 +110,7 @@ def _default_context() -> str:
           """
 
 def generate_article_based_on_topic(topic: str, context: str, release: dict) -> str:
-     prompt = f"""
+    prompt = f"""
 أنت صحفي عربي محترف في مؤسسة إعلامية بارزة، متخصص في كتابة البيانات الصحفية بلغة عربية فصيحة ودقيقة.
 اكتب البيان بصيغة "تعلن شركة ..." وليس "أعلنت"، بصوت المؤسسة، والتزم بالبيانات والتفاصيل الممنوحة وصغها في صورة بيان.
 عدد الأسطر المطلوب: {release.get('press_lines_number', 'غير محدد')}

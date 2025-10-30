@@ -1,3 +1,4 @@
+# api.py
 import os, uuid, time, jwt
 from typing import Optional, List, Dict, Any
 
@@ -5,21 +6,16 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from database import get_db_connection, _fetch_release_by_id, update_press_release
+from database import fetch_release_by_id, upsert_article_result
 
-# -------------------------
-# App & environment
-# -------------------------
 load_dotenv()
 
 OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY")
 JWT_SECRET      = os.getenv("JWT_SECRET")
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()] or ["*"]
-#PR_FORM_TABLE   = os.getenv("PR_FORM_TABLE", "press_release_Form")  # must match exact table name
 
 if not OPENAI_API_KEY:
     raise RuntimeError("Missing OPENAI_API_KEY")
@@ -37,9 +33,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# -------------------------
-# Prompt helpers
-# -------------------------
 def _build_topic(release: Dict[str, Any]) -> str:
     return (
         f"اكتب بيان للشركة {release.get('organization_name', 'غير محدد')} "
@@ -54,7 +47,7 @@ def _build_topic(release: Dict[str, Any]) -> str:
     )
 
 def _default_context() -> str:
-    return f""" اترك سطر بين كل نقطة والعنوان 
+    return  f""" اترك سطر بين كل نقطة والعنوان 
     (Press Release Structure) الجزء الأول: الهيكلية العامة للبيان الصحفي
            1.	 فى سطر منفرد العنوان الرئيسي (Headline)
           الوظيفة: يجذب انتباه الصحفي والقارئ في أقل من 5 ثوانٍ.
@@ -115,9 +108,9 @@ def _default_context() -> str:
           استخدام "نحن" أو ضمير المتكلم.
           التقديم الطويل قبل الدخول في الخبر.
           """
-    
+
 def generate_article_based_on_topic(topic: str, context: str, release: dict) -> str:
-    prompt = f"""
+     prompt = f"""
 أنت صحفي عربي محترف في مؤسسة إعلامية بارزة، متخصص في كتابة البيانات الصحفية بلغة عربية فصيحة ودقيقة.
 اكتب البيان بصيغة "تعلن شركة ..." وليس "أعلنت"، بصوت المؤسسة، والتزم بالبيانات والتفاصيل الممنوحة وصغها في صورة بيان.
 عدد الأسطر المطلوب: {release.get('press_lines_number', 'غير محدد')}
@@ -142,57 +135,18 @@ def generate_article_based_on_topic(topic: str, context: str, release: dict) -> 
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
     )
-    return response.choices[0].message.content.strip()
+    return (response.choices[0].message.content or "").strip()
 
-# -------------------------
-# Generate: latest row by user
-# -------------------------
-@app.get("/generate_article/{user_id}")
-async def generate_article(user_id: str):
-    try:
-        rows = fetch_press_releases(user_id)  # must include 'id' in rows
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"DB fetch error: {e}")
-
-    if not rows:
-        return {"error": "قائمة الإصدارات فارغة. لا يوجد بيانات."}
-
-    release = rows[-1]
-    request_id = release.get("id")
-
-    topic = _build_topic(release)
-    context = _default_context()
-
-    try:
-        article = generate_article_based_on_topic(topic, context, release)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"LLM error: {e}")
-
-    try:
-        update_press_release(
-            user_id=release["user_id"],
-            organization_name=release.get("organization_name", ""),
-            article=article,
-            request_id=request_id,
-        )
-    except Exception as e:
-        return {"generated_content": article, "warning": f"DB update failed: {e}", "request_id": request_id}
-
-    return {"generated_content": article, "request_id": request_id}
-
-# -------------------------
-# Generate: by rid (exact row)
-# -------------------------
+# ---------- Generate by rid (الافتراضي/الوحيد) ----------
 @app.get("/generate_article_by_rid/{rid}")
 async def generate_article_by_rid(rid: int):
-    row = _fetch_release_by_id(rid)
-    if not row:
+    print(f"[API] /generate_article_by_rid rid={rid}")
+    release = fetch_release_by_id(rid)
+    if not release:
         raise HTTPException(status_code=404, detail="لم يتم العثور على هذا الطلب.")
 
-    release = row
-    request_id = release.get("id")
-
-    topic = _build_topic(release)
+    request_id = int(release["id"])
+    topic   = _build_topic(release)
     context = _default_context()
 
     try:
@@ -200,15 +154,21 @@ async def generate_article_by_rid(rid: int):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"LLM error: {e}")
 
+    if not article:
+        # لو الرد جاء فاضي لأي سبب
+        return {"generated_content": "", "request_id": request_id, "warning": "LLM returned empty text"}
+
     try:
-        update_press_release(
-            user_id=release["user_id"],
-            organization_name=release.get("organization_name", ""),
-            article=article,
+        ok = upsert_article_result(
             request_id=request_id,
+            user_id=int(release["user_id"] or 0),
+            organization_name=release.get("organization_name", "") or "",
+            article=article,
         )
+        print(f"[API] upsert_article_result: {ok}")
     except Exception as e:
-        return {"generated_content": article, "warning": f"DB update failed: {e}", "request_id": request_id}
+        # نُرجع النص حتى مع فشل الحفظ
+        return {"generated_content": article, "request_id": request_id, "warning": f"DB update failed: {e}"}
 
     return {"generated_content": article, "request_id": request_id}
 

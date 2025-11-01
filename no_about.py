@@ -56,19 +56,17 @@ def generate_article_based_on_topic(topic,context,lines_number,):
     return response.choices[0].message.content.strip()
 
 
-@app.get("/no_about_article_by_rid/{rid}")
-async def no_about_article(rid: int):
-    release = fetch_release_by_id(rid)
-    #connection =get_db_connection()
+@app.get("/no_about_article/{user_id}")
+async def no_about_article(user_id: str):
+    connection =get_db_connection()
     if connection is None:
         print("Failed to establish database connection")  # connection test
     else:
-        request_id = int(release["id"])
         user_session_id = user_id
-        #all_release = fetch_press_releases(user_session_id)
-        #if not all_release:
-        #    return {"error": "لا توجد نتائج في all_release"}
-        #release = all_release[-1]
+        all_release = fetch_press_releases(user_session_id)
+        if not all_release:
+            return {"error": "لا توجد نتائج في all_release"}
+        release = all_release[-1]
       
     
         # Prepare the Arabic prompt
@@ -135,7 +133,7 @@ async def no_about_article(rid: int):
         article = generate_article_based_on_topic(topic,context,release['press_lines_number'])
       
     
-        update_data= insert_press_release(request_id,release['user_id'], release['organization_name'], article)
+        update_data= insert_press_release(request_id=0 ,release['user_id'], release['organization_name'], article)
         
         connection.commit()
         connection.close()

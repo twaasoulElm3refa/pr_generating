@@ -62,7 +62,7 @@ def fetch_press_releases(user_id: str ):
             cursor.close()
             connection.close()
 
-def fetch_release_by_id(request_id: int) -> Optional[Dict[str, Any]]:
+def fetch_release_by_id(request_id: int):
     """يجلب صفّ النموذج (المصدر) بحسب id (request_id)."""
     connection = get_db_connection()
     if not connection:

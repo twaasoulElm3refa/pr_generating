@@ -57,7 +57,7 @@ def generate_article_based_on_topic(topic,context,lines_number,):
 
 
 @app.get("/no_about_article_by_rid/{rid}")
-async def no_about_article(rid: int)):
+async def no_about_article(rid: int):
     release = fetch_release_by_id(rid)
     #connection =get_db_connection()
     if connection is None:

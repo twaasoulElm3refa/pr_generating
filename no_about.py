@@ -133,7 +133,7 @@ async def no_about_article(user_id: str):
         article = generate_article_based_on_topic(topic,context,release['press_lines_number'])
       
     
-        update_data= insert_press_release(request_id=0 ,release['user_id'], release['organization_name'], article)
+        update_data= insert_press_release(release['user_id'], release['organization_name'], article, request_id=0 )
         
         connection.commit()
         connection.close()

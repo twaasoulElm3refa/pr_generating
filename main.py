@@ -159,11 +159,11 @@ async def generate_article_by_rid(rid: int):
         return {"generated_content": "", "request_id": request_id, "warning": "LLM returned empty text"}
 
     try:
-        ok = upsert_article_result(
-            request_id=request_id,
+        ok = insert_article_result(
             user_id=int(release["user_id"] or 0),
             organization_name=release.get("organization_name", "") or "",
             article=article,
+            request_id=request_id,
         )
         print(f"[API] upsert_article_result: {ok}")
     except Exception as e:
@@ -249,7 +249,7 @@ async def generate_article(user_id: str):
         article = generate_article_based_on_topic(topic,context,release['press_lines_number'])
       
     
-        update_data= insert_press_release(release['user_id'], release['organization_name'], article, request_id=0 )
+        update_data= insert_press_release(release['user_id'], release['organization_name'], article, request_id=1)
         
         connection.commit()
         connection.close()

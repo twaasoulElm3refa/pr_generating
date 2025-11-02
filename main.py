@@ -6,10 +6,10 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+
 from dotenv import load_dotenv
 from openai import OpenAI
-
-from database import fetch_release_by_id, upsert_article_result
+from database import get_db_connection,fetch_press_releases,fetch_release_by_id, insert_press_release
 
 load_dotenv()
 
@@ -172,6 +172,90 @@ async def generate_article_by_rid(rid: int):
 
     return {"generated_content": article, "request_id": request_id}
 
+@app.get("/generate_article/{user_id}")
+async def generate_article(user_id: str):
+    connection =get_db_connection()
+    if connection is None:
+        print("Failed to establish database connection")  # connection test
+    else:
+        user_session_id = user_id
+        all_release = fetch_press_releases(user_session_id)
+        if not all_release:
+            return {"error": "لا توجد نتائج في all_release"}
+        release = all_release[-1]
+      
+    
+        # Prepare the Arabic prompt
+        topic = f"اكتب بيان للشركة {release['organization_name']} حيث محتوى البيان عن {release['about_press']} بتاريخ {release['press_date']} ويكون عدد الاسطر {release['press_lines_number']}"
+        context = f"""(Press Release Structure) الجزء الأول: الهيكلية العامة للبيان الصحفي
+1.	العنوان الرئيسي (Headline)
+الوظيفة: يجذب انتباه الصحفي والقارئ في أقل من 5 ثوانٍ.
+السمات: مباشر، مختصر، خبري، دون مبالغة، يعكس جوهر البيان.
+الطول الأمثل: 6–12 كلمة (يفضل أقل من 90 حرفًا).
+نموذج عالمي معتمد:
+بدلًا من: "حدث رائع وفريد من نوعه في السوق السعودي"
+استخدم: "شركة [X] تطلق أول منصة رقمية للتمويل العقاري في السعودية"
+2.	العنوان الفرعي (Subheadline) – اختياري
+الوظيفة: توسيع الفكرة الرئيسية، إضافة عنصر جديد ( فائدة).
+الطول الأمثل: لا يزيد عن سطرين.
+النبرة: معلوماتية، مكملة، دون تكرار العنوان الرئيسي.
+3.	سطر التاريخ (Dateline)
+الهيئة القياسية:
+[التاريخ الكامل بصيغة يوم/شهر/سنة]
+مثال:
+ 5 مايو 2025
+4.	الفقرة الافتتاحية (Lead Paragraph)
+الوظيفة: تلخيص الخبر في جملة واحدة إلى ثلاث جمل.
+القاعدة الذهبية: الإجابة عن الأسئلة الست: من؟ ماذا؟ متى؟ أين؟ لماذا؟ كيف؟
+نغمة الصياغة: مباشرة، دون مقدمات أو سياقات تحليلية.
+5.	جسم البيان (Body)
+التوزيع الداخلي:
+الفقرة الثانية: خلفية الخبر وسياقه (دوافع، أهداف، مدى التأثير).
+8.	السطر الختامي (End Notation)
+يُفضل عالميًا استخدام:
+أو
+-	انتهى –
+لإعلام الصحفي بانتهاء البيان.
+الجزء الثاني: قواعد الصياغة الاحترافية لكل قسم في البيان الصحفي
+(Writing Best Practices by Section)
+1.	العنوان الرئيسي (Headline)
+أفضل الممارسات:
+ابدأ بالفعل أو الكلمة المفتاحية.
+تجنب الكلمات الإنشائية مثل: "متميز"، "رائع"، "فريد"، واستبدلها بمعلومة أو إنجاز ملموس.
+لا تضع نقطًا في نهاية العنوان.
+تجنب الحروف الكبيرة إلا في أسماء العلم أو الاختصارات الرسمية.
+مثال سيئ:
+"نجاح ساحق لشركتنا في إطلاق منتج مذهل"
+مثال احترافي:
+"شركة نماء تطلق أول منصة إلكترونية لتوزيع المنتجات الزراعية في الخليج"
+2.	العنوان الفرعي (Subheadline)
+أفضل الممارسات:
+يشرح قيمة أو نتيجة أو خلفية للعنوان.
+يضيف رقمًا أو إشارة زمنية أو توسيعًا جغرافيًا.
+لا يكرر كلمات العنوان.
+مثال جيد:
+"المنصة الجديدة توفر للمزارعين أدوات رقمية لتوسيع قاعدة عملائهم ورفع دخلهم بنسبة 30٪"
+3.	الفقرة الافتتاحية (Lead Paragraph)
+أفضل الممارسات:
+الصياغة كأنها خبر صحفي مستقل.
+دون تعبيرات ترحيبية أو مقدمات أدبية.
+لا تبدأ بـ"يسرّ الشركة" أو "أعلنت اليوم"، بل ابدأ بالحدث مباشرة.
+مثال جيد:
+"أطلقت شركة نماء اليوم منصتها الإلكترونية الجديدة التي تتيح للمزارعين بيع منتجاتهم مباشرةً للمستهلكين في مختلف مناطق الخليج."
+أخطاء شائعة:
+استخدام "نحن" أو ضمير المتكلم.
+التقديم الطويل قبل الدخول في الخبر.
+"""
+        article = generate_article_based_on_topic(topic,context,release['press_lines_number'])
+      
+    
+        update_data= insert_press_release(release['user_id'], release['organization_name'], article, request_id=0 )
+        
+        connection.commit()
+        connection.close()
+        
+    return {"generated_content": article}
+
 # -------------------------
 # Chat (session + streaming)
 # -------------------------
@@ -202,6 +286,7 @@ class ChatIn(BaseModel):
     message: str
     visible_values: List[VisibleValue] = Field(default_factory=list)
 
+# --- helpers ---
 def _make_jwt(session_id: str, user_id: int) -> str:
     payload = {
         "sid": session_id,
@@ -242,6 +327,7 @@ def _values_to_context(values: List[VisibleValue]) -> str:
         parts.append(f"النص الحالي للمقال: {article}")
     return " | ".join(parts) if parts else "لا توجد تفاصيل كافية."
 
+# --- routes ---
 @app.post("/session", response_model=SessionOut)
 def create_session(body: SessionIn):
     sid = str(uuid.uuid4())

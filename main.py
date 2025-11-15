@@ -150,6 +150,7 @@ async def generate_article_by_rid(rid: int):
     request_id = int(release["id"])
     topic   = _build_topic(release)
     context = _default_context()
+    print ("IN RIdddddddD : /n topic:",topic, "/n context:", context )
 
     try:
         article = generate_article_based_on_topic(topic, context, release)
@@ -186,14 +187,13 @@ async def generate_article(user_id: str):
             return {"error": "لا توجد نتائج في all_release"}
         release = all_release[-1]
         print(f"[API] /generate_article/userid={user_session_id}")
-        release = fetch_release_by_id(rid)
     
         # Prepare the Arabic prompt
         #topic = f"اكتب بيان للشركة {release['organization_name']} حيث محتوى البيان عن {release['about_press']} بتاريخ {release['press_date']} ويكون عدد الاسطر {release['press_lines_number']}"
         
         topic   = _build_topic(release)
         context = _default_context()
-        
+        print ("IN userIdddddd ,/n  topic:",topic, "/n context:", context )
         article = generate_article_based_on_topic(topic,context,release)
     
         update_data= insert_press_release(release['user_id'], release['organization_name'], article, request_id=1)

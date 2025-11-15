@@ -185,7 +185,8 @@ async def generate_article(user_id: str):
         if not all_release:
             return {"error": "لا توجد نتائج في all_release"}
         release = all_release[-1]
-      
+        print(f"[API] /generate_article/userid={user_session_id}")
+        release = fetch_release_by_id(rid)
     
         # Prepare the Arabic prompt
         #topic = f"اكتب بيان للشركة {release['organization_name']} حيث محتوى البيان عن {release['about_press']} بتاريخ {release['press_date']} ويكون عدد الاسطر {release['press_lines_number']}"

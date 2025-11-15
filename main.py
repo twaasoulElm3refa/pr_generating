@@ -130,9 +130,13 @@ def generate_article_based_on_topic(topic: str, context: str, release: dict) -> 
 استخدم المعلومات التالية كنموذج لكيفية صياغة البيان (إرشادات بنية وصياغة):
 {context}
 """.strip()
-print (f'''{release.get('press_lines_number', 'غير محدد')} {release.get('press_date', 'غير محدد')} 
-{release.get('about_organization', 'غير متوفر')} {release.get('organization_phone', 'غير متوفر')}
- {release.get('organization_email', 'غير متوفر')} {release.get('organization_website', 'غير متوفر')}''')
+    
+    print(f"""عدد السطور: {val(release, 'press_lines_number', 'غير محدد')}
+    التاريخ: {val(release, 'press_date', 'غير محدد')}
+    عن الجهة: {val(release, 'about_organization')}
+    الهاتف: {val(release, 'organization_phone')}
+    البريد: {val(release, 'organization_email')}
+    الموقع: {val(release, 'organization_website')}""")
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",

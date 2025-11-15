@@ -70,6 +70,7 @@ def _default_context() -> str:
           نغمة الصياغة: مباشرة، دون مقدمات أو سياقات تحليلية.
           5.	جسم البيان (Body)
           الفقرة الرابعة: تفاصيل إضافية .
+          6.للمحررين
           7.	معلومات التواصل (Media Contact)
           البريد الإلكتروني الرسمي
           رقم الهاتف المباشر
@@ -110,6 +111,7 @@ def _default_context() -> str:
           """
 
 def generate_article_based_on_topic(topic: str, context: str, release: dict) -> str:
+    
     prompt = f"""
 أنت صحفي عربي محترف في مؤسسة إعلامية بارزة، متخصص في كتابة البيانات الصحفية بلغة عربية فصيحة ودقيقة.
 اكتب البيان بصيغة "تعلن شركة ..." وليس "أعلنت"، بصوت المؤسسة، والتزم بالبيانات والتفاصيل الممنوحة وصغها في صورة بيان.
@@ -131,7 +133,7 @@ def generate_article_based_on_topic(topic: str, context: str, release: dict) -> 
 {context}
 """.strip()
     
-    print(release)
+    print("release",release)
     
     response = client.chat.completions.create(
         model="gpt-4o-mini",

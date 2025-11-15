@@ -111,7 +111,8 @@ def _default_context() -> str:
           """
 
 def generate_article_based_on_topic(topic: str, context: str, release: dict) -> str:
-    
+    # with trimming + fallback in Arabic
+    print(str(release.get('press_date', '')).strip() or 'غير محدد')
     prompt = f"""
 أنت صحفي عربي محترف في مؤسسة إعلامية بارزة، متخصص في كتابة البيانات الصحفية بلغة عربية فصيحة ودقيقة.
 اكتب البيان بصيغة "تعلن شركة ..." وليس "أعلنت"، بصوت المؤسسة، والتزم بالبيانات والتفاصيل الممنوحة وصغها في صورة بيان.

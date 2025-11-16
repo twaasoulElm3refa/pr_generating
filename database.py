@@ -85,7 +85,7 @@ def fetch_release_by_id(request_id: int):
         connection.close()
 
 
-def insert_press_release( user_id, organization_name, article, request_id=0):
+def insert_press_release( user_id, organization_name, article, request_id=1):
     connection = get_db_connection()
     if connection is None:
         return False

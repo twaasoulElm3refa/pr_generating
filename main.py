@@ -71,10 +71,11 @@ def _default_context() -> str:
           5.	جسم البيان (Body)
           الفقرة الرابعة: تفاصيل إضافية .
           6.للمحررين
-          7.	معلومات التواصل (Media Contact)
+          7. حول الشركة
+          8.	معلومات التواصل (Media Contact)
           البريد الإلكتروني الرسمي
           رقم الهاتف المباشر
-          8.	السطر الختامي (End Notation)
+          9.	السطر الختامي (End Notation)
           يُفضل عالميًا استخدام:
           أو
           -	انتهى –
@@ -129,11 +130,7 @@ def generate_article_based_on_topic(topic: str, context: str, release: dict) -> 
   الهاتف: {release.get('organization_phone', 'غير متوفر')}
   البريد الإلكتروني: {release.get('organization_email', 'غير متوفر')}
   الموقع: {release.get('organization_website', 'غير متوفر')}
-
-استخدم المعلومات التالية كنموذج لكيفية صياغة البيان (إرشادات بنية وصياغة):
-{context}
-""".strip()
-    
+"""
     print("release",release)
     
     response = client.chat.completions.create(

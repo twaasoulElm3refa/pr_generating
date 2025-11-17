@@ -162,7 +162,7 @@ async def generate_article_by_rid(rid: int):
         return {"generated_content": "", "request_id": request_id, "warning": "LLM returned empty text"}
 
     try:
-        ok = insert_article_result(
+        ok = insert_press_release(
             user_id=int(release["user_id"] or 0),
             organization_name=release.get("organization_name", "") or "",
             article=article,

@@ -196,7 +196,7 @@ async def generate_article(user_id: str):
         print ("IN userIdddddd ,/n  topic:",topic, "/n context:", context )
         article = generate_article_based_on_topic(topic,context,release)
     
-        update_data= insert_press_release(release['user_id'], release['organization_name'], article, request_id=1)
+        update_data= insert_press_release(release['user_id'], release['organization_name'], article, release['request_id'])
         
         connection.commit()
         connection.close()

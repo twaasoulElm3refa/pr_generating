@@ -112,8 +112,6 @@ def _default_context() -> str:
           """
 
 def generate_article_based_on_topic(topic: str, context: str, release: dict) -> str:
-    # with trimming + fallback in Arabic
-    print(str(release.get('press_date', '')).strip() or 'غير محدد')
     prompt = f"""
 أنت صحفي عربي محترف في مؤسسة إعلامية بارزة، متخصص في كتابة البيانات الصحفية بلغة عربية فصيحة ودقيقة.
 اكتب البيان بصيغة "تعلن شركة ..." وليس "أعلنت"، بصوت المؤسسة، والتزم بالبيانات والتفاصيل الممنوحة وصغها في صورة بيان.
@@ -131,7 +129,6 @@ def generate_article_based_on_topic(topic: str, context: str, release: dict) -> 
   البريد الإلكتروني: {release.get('organization_email', 'غير متوفر')}
   الموقع: {release.get('organization_website', 'غير متوفر')}
 """
-    print("release",release)
     
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -150,7 +147,6 @@ async def generate_article_by_rid(rid: int):
     request_id = int(release["id"])
     topic   = _build_topic(release)
     context = _default_context()
-    print ("IN RIdddddddD : /n topic:",topic, "/n context:", context )
 
     try:
         article = generate_article_based_on_topic(topic, context, release)
@@ -189,11 +185,8 @@ async def generate_article(user_id: str):
         print(f"[API] /generate_article/userid={user_session_id}")
     
         # Prepare the Arabic prompt
-        #topic = f"اكتب بيان للشركة {release['organization_name']} حيث محتوى البيان عن {release['about_press']} بتاريخ {release['press_date']} ويكون عدد الاسطر {release['press_lines_number']}"
-        
         topic   = _build_topic(release)
         context = _default_context()
-        print ("IN userIdddddd ,/n  topic:",topic, "/n context:", context )
         article = generate_article_based_on_topic(topic,context,release)
     
         update_data= insert_press_release(release['user_id'], release['organization_name'], article, release['request_id'])

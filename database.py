@@ -14,8 +14,8 @@ db_user = os.getenv("DB_USER")
 db_password = os.getenv("DB_PASSWORD")
 db_name = os.getenv("DB_NAME")
 
-PR_TABLE = "wpl3_press_release_Form"
-ARTICLES_TABLE = "wpl3_articles"
+PR_TABLE = "A11i_press_release_Form"
+ARTICLES_TABLE = "A11i_articles"
 
 def get_db_connection():
     try:
